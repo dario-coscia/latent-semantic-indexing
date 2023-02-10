@@ -1,6 +1,6 @@
-from abc import ABCMeta
 import numpy as np
 import torch
+from tqdm import tqdm
 from abc import ABCMeta, abstractmethod
 
 
@@ -20,6 +20,9 @@ class Reduction(metaclass=ABCMeta):
             raise ValueError("expected the embedding dimension to be "
                              "an int greater than one.")
 
+        # reduced document matrix
+        self._reduced_doc_matrix = None
+
     def __call__(self, term_document_matrix):
 
         # check consistency
@@ -30,9 +33,8 @@ class Reduction(metaclass=ABCMeta):
             raise ValueError("expected a numpy 2 dimensional array")
 
         # perform optimization
-        print(f"fitting process starts ...")
+        print(f"Computing term-document matrix reduction starts")
         self._fit(term_document_matrix)
-        print(f"fitting process correctly executed")
 
     @abstractmethod
     def _fit(self, term_document_matrix):
@@ -77,6 +79,7 @@ class SVD(Reduction):
         singular values is, IEEE Transactions on Information Theory 60.8
         (2014): 5040-5053.
         """
+
         # compute svd
         u, s, v = np.linalg.svd(X, full_matrices=False)
         s = np.diag(s)
@@ -84,7 +87,7 @@ class SVD(Reduction):
         # reduce order matrices
         u = u[:, :self._rank]
         s = s[:self._rank, :self._rank]
-        v = v[:, :self._rank]
+        v = v
 
         # save u @ sigma
         self._u_times_sigma = np.dot(u, s)
@@ -93,6 +96,9 @@ class SVD(Reduction):
         inverse_s = np.linalg.pinv(s)
         tranpose_u = np.transpose(u)
         self._invsigma_times_ut = np.dot(inverse_s, tranpose_u)
+
+        # document matrix
+        self._reduced_doc_matrix = self.from_vect_to_embedding(X)
 
     def from_vect_to_embedding(self, vect):
         """
@@ -177,14 +183,14 @@ class KernelPCA(Reduction):
         K = np.dot(np.dot(center_coeff, K), center_coeff)
 
         # performing svd
-        u, s, _ = np.linalg.svd(X, full_matrices=False)
+        u, s, v = np.linalg.svd(X, full_matrices=False)
         s = np.sqrt(np.diag(s))
 
         # reduce order matrices
         u = u[:, :self._rank]
         s = s[:self._rank, :self._rank]
 
-        # save u @ sigma
+        # save u @ sigma, document reduce matrix
         self._u_times_sigma = np.dot(u, s)
 
         # compute pseudo_inverse using ridge regression
@@ -193,6 +199,9 @@ class KernelPCA(Reduction):
         pinv_s = np.dot(pinv_s, s.T)
         tranpose_u = np.transpose(u)
         self._invsigma_times_ut = np.dot(pinv_s, tranpose_u)
+
+        # save document recuced matrix
+        self._reduced_doc_matrix = self.from_vect_to_embedding(X)
 
     def from_vect_to_embedding(self, vect):
         """
@@ -219,7 +228,7 @@ class KernelPCA(Reduction):
 
 class AutoEncoder(Reduction):
 
-    def __init__(self, embedding_dim, encoder, decoder, epochs=1000,
+    def __init__(self, embedding_dim, encoder=None, decoder=None, epochs=1000,
                  optimizer=torch.optim.Adam, optimizer_kwargs=None,
                  lr=0.001):
         """AutoEncoder dimensionality redution.
@@ -247,7 +256,6 @@ class AutoEncoder(Reduction):
 
         self._encoder = encoder
         self._decoder = decoder
-        self._model = torch.nn.Sequential(encoder, decoder)
         self._loss = torch.nn.MSELoss()
 
         if not isinstance(epochs, int):
@@ -256,10 +264,9 @@ class AutoEncoder(Reduction):
             self._iter = epochs
 
         if not optimizer_kwargs:
-            optimizer_kwargs = {}
-        optimizer_kwargs['lr'] = lr
-        self._optimizer = optimizer(
-            self._model.parameters(),  **optimizer_kwargs)
+            self._optimizer_kwargs = {}
+        self._optimizer_kwargs['lr'] = lr
+        self._optimizer = optimizer
 
     def _handle_dtype(self, input_):
         """
@@ -268,7 +275,7 @@ class AutoEncoder(Reduction):
         :param np.ndarray input_: input for dtype torch conversion
         """
 
-        # conver input into torch tensir
+        # conver input into torch tensor
         X = torch.from_numpy(input_)
 
         # only if we don't use floats
@@ -285,10 +292,35 @@ class AutoEncoder(Reduction):
         """
         Perform Training for Dimensionality Reduction.
         """
-        X = self._handle_dtype(X)
+        (n_terms, n_docs) = X.shape
+        if self._rank > n_docs:
+            self._rank = n_docs
+        X = X.T
 
+        if self._encoder is None:
+            self._encoder = torch.nn.Sequential(
+                torch.nn.Linear(n_terms, n_terms // 2),
+                torch.nn.ReLU(),
+                torch.nn.Linear(n_terms // 2, n_terms // 4),
+                torch.nn.ReLU(),
+                torch.nn.Linear(n_terms // 4, self._rank)
+            )
+
+        if self._decoder is None:
+            self._decoder = torch.nn.Sequential(
+                torch.nn.Linear(self._rank, n_terms // 4),
+                torch.nn.ReLU(),
+                torch.nn.Linear(n_terms // 4, n_terms // 2),
+                torch.nn.ReLU(),
+                torch.nn.Linear(n_terms // 2, n_terms)
+            )
+        self._model = torch.nn.Sequential(self._encoder, self._decoder)
+        self._optimizer = self._optimizer(
+            self._model.parameters(), **self._optimizer_kwargs)
+
+        X = self._handle_dtype(X)
         self._model.train()
-        for _ in range(self._iter):
+        for _ in tqdm(range(self._iter)):
             output = self._model(X)
             loss = self._loss(X, output)
             self._optimizer.zero_grad()
@@ -297,16 +329,22 @@ class AutoEncoder(Reduction):
 
         self._model.eval()
 
+        # save document recuced matrix
+        self._reduced_doc_matrix = self._encoder(X).detach().numpy().T
+
     def _check_consistency(self, encoder, decoder):
         """Checking consistency encoder decoder structure.
         """
-        if not isinstance(encoder, torch.nn.Module):
-            raise ValueError(
-                "expected encoder to be instance of torch.nn.Module class")
 
-        if not isinstance(decoder, torch.nn.Module):
-            raise ValueError(
-                "expected decoder to be instance of torch.nn.Module class")
+        if encoder is not None:
+            if not isinstance(encoder, torch.nn.Module):
+                raise ValueError(
+                    "expected encoder to be instance of torch.nn.Module class")
+
+        if decoder is not None:
+            if not isinstance(decoder, torch.nn.Module):
+                raise ValueError(
+                    "expected decoder to be instance of torch.nn.Module class")
 
     def from_vect_to_embedding(self, vect):
         """
