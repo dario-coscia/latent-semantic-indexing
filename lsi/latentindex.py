@@ -30,7 +30,7 @@ class LatentIndex(object):
             np.linalg.norm(query_embedding)
         return p1 / p2
 
-    def query(self, query: list[str], rank: int = 10):
+    def query(self, query: list[str], rank: int = None):
         query_vector = self._vectorizer.query(query)
 
         if query_vector is None:
@@ -41,11 +41,13 @@ class LatentIndex(object):
 
         # extract docIDs
         idx_similarity = self._compute_similarity(query_vector_embedding)
-        # docIDs = np.argsort(idx_similarity)[:rank]
 
         # df
         df = self._vectorizer._corpus
         df["similarity"] = idx_similarity
         df["text"] = self._vectorizer._corpus["original_text"]
 
-        return df.sort_values('similarity', ascending=False)
+        if rank is None:
+            return df.sort_values('similarity', ascending=False)
+
+        return df.sort_values('similarity', ascending=False).head(rank)
