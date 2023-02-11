@@ -1,4 +1,4 @@
-from reduction import SVD, KernelPCA
+from lsi.reduction import SVD, KernelPCA
 import numpy as np
 
 M = np.array([[1., 0, 0, 0, 2],

@@ -1,8 +1,8 @@
 import os
 import numpy as np
-from reduction import Reduction, SVD, KernelPCA
+from .reduction import Reduction, SVD, KernelPCA
 import pandas as pd
-from vectorizer import Vectorizer, BagOfWord
+from .vectorizer import Vectorizer, BagOfWord
 
 
 class LatentIndex(object):

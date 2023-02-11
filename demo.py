@@ -1,12 +1,11 @@
-from latentindex import LatentIndex
-from vectorizer import BagOfWord
-from reduction import SVD, KernelPCA, AutoEncoder
+from lsi import LatentIndex
+from lsi.reduction import SVD, KernelPCA, AutoEncoder
+from lsi.vectorizer import BagOfWord
 import os
 import time
 import argparse
 import pandas as pd
-import pickle
-from pickle import load, dump
+import dill
 from nltk import corpus
 
 
@@ -84,10 +83,10 @@ if __name__ == "__main__":
         latent_index = LatentIndex(df, vectorizer, reduction)
         if args.dump is not None:
             with open(args.dump, 'wb') as f:
-                dump(latent_index, f, protocol=pickle.HIGHEST_PROTOCOL)
+                dill.dump(latent_index, f)
     else:
         with open(args.load, 'rb') as f:
-            latent_index = load(f)
+            latent_index = dill.load(f)
 
     # performing the query
     # TODO: add a nice method for printing
