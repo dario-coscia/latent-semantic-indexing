@@ -319,6 +319,11 @@ class AutoEncoder(Reduction):
             self._model.parameters(), **self._optimizer_kwargs)
 
         X = self._handle_dtype(X)
+
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self._model = self._model.to(device)
+        X = X.to(device)
+
         self._model.train()
         for _ in tqdm(range(self._iter)):
             output = self._model(X)
@@ -327,6 +332,8 @@ class AutoEncoder(Reduction):
             loss.backward()
             self._optimizer.step()
 
+        X = X.to('cpu')
+        self._model = self._model.to('cpu')
         self._model.eval()
 
         # save document recuced matrix
