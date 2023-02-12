@@ -177,9 +177,13 @@ if __name__ == "__main__":
         mean_precision.append(np.array(final_prec))
         mean_recall.append(np.array(final_recall))
 
-    # plt.plot(np.mean(mean_recall, axis=0), np.mean(mean_precision, axis=0))
-    # plt.ylabel('precision')
-    # plt.xlabel('recall')
-    # plt.grid()
-    # plt.show()
+    plt.plot(np.mean(mean_recall, axis=0), np.mean(mean_precision, axis=0))
+    plt.ylabel('precision')
+    plt.xlabel('recall')
+    plt.grid()
+    if args.type == 'kpca':
+        plt.savefig(args.type + '_' + args.kernel +
+                    '_' + str(args.embedding_dim) + '.png')
+    else:
+        plt.savefig(args.type + '_' + str(args.embedding_dim) + '.png')
     # print(f"MAE: {sum(mean_ave_prec)/len(mean_ave_prec)}")
