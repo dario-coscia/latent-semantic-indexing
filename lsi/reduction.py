@@ -228,9 +228,9 @@ class KernelPCA(Reduction):
 
 class AutoEncoder(Reduction):
 
-    def __init__(self, embedding_dim, encoder=None, decoder=None, epochs=1000,
+    def __init__(self, embedding_dim, encoder=None, decoder=None, epochs=50,
                  optimizer=torch.optim.Adam, optimizer_kwargs=None,
-                 lr=0.001):
+                 lr=0.001, batch_size=24):
         """AutoEncoder dimensionality redution.
 
         :param embedding_dim: dimension of the manifold embedding
@@ -257,6 +257,11 @@ class AutoEncoder(Reduction):
         self._encoder = encoder
         self._decoder = decoder
         self._loss = torch.nn.MSELoss()
+
+        if not isinstance(batch_size, int):
+            raise ValueError("batch_size must be int")
+        else:
+            self._batch_size = batch_size
 
         if not isinstance(epochs, int):
             raise ValueError("epoch must be int")
@@ -320,17 +325,22 @@ class AutoEncoder(Reduction):
 
         X = self._handle_dtype(X)
 
+        # batching
+
+        dataloader = torch.utils.data.DataLoader(
+            X, batch_size=self._batch_size)
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self._model = self._model.to(device)
-        X = X.to(device)
 
         self._model.train()
         for _ in tqdm(range(self._iter)):
-            output = self._model(X)
-            loss = self._loss(X, output)
-            self._optimizer.zero_grad()
-            loss.backward()
-            self._optimizer.step()
+            for x in dataloader:
+                x = x.to(device)
+                output = self._model(x)
+                loss = self._loss(x, output)
+                self._optimizer.zero_grad()
+                loss.backward()
+                self._optimizer.step()
 
         X = X.to('cpu')
         self._model = self._model.to('cpu')
