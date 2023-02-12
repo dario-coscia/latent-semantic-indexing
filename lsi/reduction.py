@@ -183,7 +183,7 @@ class KernelPCA(Reduction):
         K = np.dot(np.dot(center_coeff, K), center_coeff)
 
         # performing svd
-        u, s, v = np.linalg.svd(X, full_matrices=False)
+        u, s, v = np.linalg.svd(K, full_matrices=False)
         s = np.sqrt(np.diag(s))
 
         # reduce order matrices
