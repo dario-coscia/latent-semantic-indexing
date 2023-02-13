@@ -9,6 +9,15 @@ class LatentIndex(object):
 
     def __init__(self, corpus: pd.DataFrame,
                  vectorizer: Vectorizer, dim_reduction: Reduction):
+        """Latent Index base class
+
+        :param corpus: corpus of the information retrieval system
+        :type corpus: pd.DataFrame
+        :param vectorizer: type of vectorization
+        :type vectorizer: Vectorizer
+        :param dim_reduction: type of reduction
+        :type dim_reduction: Reduction
+        """
 
         # set the vectorizer
         self._vectorizer = vectorizer
@@ -24,6 +33,13 @@ class LatentIndex(object):
         del matrix
 
     def _compute_similarity(self, query_embedding):
+        """computes the similarity matrix for a query embedding
+
+        :param query_embedding: query vector in embedding form
+        :type query_embedding: np.ndarray
+        :return: similarity matrix
+        :rtype: np.ndarray
+        """
         doc_matrix = self._dim_reduction._reduced_doc_matrix
         p1 = query_embedding.dot(doc_matrix)
         p2 = np.linalg.norm(doc_matrix, axis=0) * \
@@ -31,6 +47,13 @@ class LatentIndex(object):
         return p1 / p2
 
     def query(self, query: list[str], rank: int = None):
+        """Perform a query to the ir system
+
+        :param query: a string describing the query
+        :type query: list[str]
+        :param rank: rank-top documents to retrieved, defaults to None
+        :type rank: int, optional
+        """
         query_vector = self._vectorizer.query(query)
 
         if query_vector is None:
