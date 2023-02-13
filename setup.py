@@ -15,8 +15,10 @@ AUTHOR = meta['__author__']
 VERSION = meta['__version__']
 KEYWORDS = 'latentindex'
 
+
 REQUIRED = [
-    'numpy', 'tqdm', 'nltk', 'pandas'
+    'dill', 'matplotlib', 'nltk', 'pandas',
+    'numpy', 'torch', 'setuptools', 'tqdm'
 ]
 
 EXTRAS = {
